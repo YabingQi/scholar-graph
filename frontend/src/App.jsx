@@ -68,14 +68,12 @@ export default function App() {
     }
   }, [expandAuthorData]);
 
-  // Client-side BFS on edges
+  // Client-side BFS on an edge list
   function bfsOnEdges(edgeList, sourceId, targetId) {
-    const adjMap = {};
+    const adj = {};
     for (const e of edgeList) {
-      if (!adjMap[e.source]) adjMap[e.source] = [];
-      if (!adjMap[e.target]) adjMap[e.target] = [];
-      adjMap[e.source].push(e.target);
-      adjMap[e.target].push(e.source);
+      (adj[e.source] = adj[e.source] || []).push(e.target);
+      (adj[e.target] = adj[e.target] || []).push(e.source);
     }
     if (sourceId === targetId) return [sourceId];
     const visited = new Set([sourceId]);
@@ -83,40 +81,83 @@ export default function App() {
     while (queue.length) {
       const path = queue.shift();
       const cur = path[path.length - 1];
-      for (const nb of (adjMap[cur] || [])) {
+      for (const nb of (adj[cur] || [])) {
         if (nb === targetId) return [...path, nb];
-        if (!visited.has(nb)) {
-          visited.add(nb);
-          queue.push([...path, nb]);
-        }
+        if (!visited.has(nb)) { visited.add(nb); queue.push([...path, nb]); }
       }
     }
     return null;
   }
 
-  // Called by PathFinder — expand both authors if needed, then BFS
+  // Called by PathFinder: iterative bidirectional expansion, up to 3 levels each side
   const handleFindPath = useCallback(async (srcAuthor, tgtAuthor, onResult) => {
     const srcId = srcAuthor.authorId;
     const tgtId = tgtAuthor.authorId;
     setPathNodeIds([]);
     setLoading(true);
 
+    // Local edge accumulator — not subject to React state flush timing
+    const localEdgeMap = new Map(edgesRef.current.map(e => [e.id, e]));
+    const expandedNodes = new Set();
+
+    function addEdges(edges) {
+      for (const e of edges) {
+        const rev = `${e.target}-${e.source}`;
+        if (!localEdgeMap.has(e.id) && !localEdgeMap.has(rev)) localEdgeMap.set(e.id, e);
+      }
+    }
+
+    async function expand(id) {
+      if (expandedNodes.has(id)) return null;
+      expandedNodes.add(id);
+      const data = await expandAuthorData(id);
+      addEdges(data.edges);
+      return data;
+    }
+
+    function tryBFS() {
+      return bfsOnEdges([...localEdgeMap.values()], srcId, tgtId);
+    }
+
+    function neighborsOf(ids) {
+      const adj = {};
+      for (const e of localEdgeMap.values()) {
+        (adj[e.source] = adj[e.source] || []).push(e.target);
+        (adj[e.target] = adj[e.target] || []).push(e.source);
+      }
+      return [...new Set(ids.flatMap(id => adj[id] || []))].filter(id => !expandedNodes.has(id));
+    }
+
+    let foundPath = null;
     try {
-      // Always expand both authors to ensure complete, consistent edge data.
-      // (Search API PIDs vs XML PIDs can differ; re-expanding guarantees graph is fresh.)
-      setStatus("Loading author networks…");
-      await Promise.all([expandAuthorData(srcId), expandAuthorData(tgtId)]);
+      // Level 0: expand both authors
+      setStatus("Loading both author networks…");
+      const [dataA, dataB] = await Promise.all([expand(srcId), expand(tgtId)]);
+      foundPath = tryBFS();
 
-      // Use edgesRef for up-to-date edge list (setEdges is async)
-      const path = bfsOnEdges(edgesRef.current, srcId, tgtId);
+      if (!foundPath) {
+        // Levels 1–3: expand frontier from each side, up to 3 rounds
+        let frontierA = (dataA?.nodes || []).filter(n => n.id !== srcId).slice(0, 20).map(n => n.id);
+        let frontierB = (dataB?.nodes || []).filter(n => n.id !== tgtId).slice(0, 20).map(n => n.id);
 
-      if (!path) {
-        setStatus("No direct path found in the loaded graph.");
-        onResult(null);
+        for (let level = 1; level <= 3 && !foundPath; level++) {
+          setStatus(`Searching deeper… (level ${level}/3)`);
+          await Promise.all([...frontierA, ...frontierB].map(expand));
+          foundPath = tryBFS();
+          if (!foundPath) {
+            frontierA = neighborsOf(frontierA).slice(0, 15);
+            frontierB = neighborsOf(frontierB).slice(0, 15);
+          }
+        }
+      }
+
+      if (foundPath) {
+        setStatus(`${foundPath.length - 1} degree${foundPath.length - 1 !== 1 ? "s" : ""} of separation.`);
+        onResult({ path: foundPath, degrees: foundPath.length - 1, nodes: [] });
+        setPathNodeIds(foundPath);
       } else {
-        setStatus(`${path.length - 1} degree${path.length - 1 !== 1 ? "s" : ""} of separation.`);
-        onResult({ path, degrees: path.length - 1, nodes: [] });
-        setPathNodeIds(path);
+        setStatus("No path found within 3 levels — these two may be too far apart.");
+        onResult(null);
       }
     } catch {
       setStatus("Failed to load author data.");
@@ -124,7 +165,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [nodes, expandAuthorData]);
+  }, [expandAuthorData]);
 
   function handleFocusNode(node) {
     graphRef.current?.focusNode(node.id);
