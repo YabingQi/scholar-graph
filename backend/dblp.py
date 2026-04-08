@@ -17,8 +17,8 @@ UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 
 # Shared async HTTP/2 client — reuses connections across requests
 _client: httpx.AsyncClient | None = None
-# Semaphore: max 3 concurrent DBLP requests to stay within rate limits
-_sem = asyncio.Semaphore(3)
+# Semaphore: max 5 concurrent DBLP requests (HTTP/2 multiplexing handles this well)
+_sem = asyncio.Semaphore(5)
 
 
 def _get_client() -> httpx.AsyncClient:

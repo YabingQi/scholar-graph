@@ -137,8 +137,8 @@ export default function App() {
 
       if (!foundPath) {
         // Bidirectional expansion: always expand the smaller frontier next
-        let frontierA = (dataA?.nodes || []).filter(n => n.id !== srcId).slice(0, 20).map(n => n.id);
-        let frontierB = (dataB?.nodes || []).filter(n => n.id !== tgtId).slice(0, 20).map(n => n.id);
+        let frontierA = (dataA?.nodes || []).filter(n => n.id !== srcId).slice(0, 15).map(n => n.id);
+        let frontierB = (dataB?.nodes || []).filter(n => n.id !== tgtId).slice(0, 15).map(n => n.id);
 
         for (let level = 1; level <= 3 && !foundPath; level++) {
           // Pick the smaller frontier to expand first, then the larger
@@ -153,8 +153,8 @@ export default function App() {
             if (foundPath) break;
           }
           if (!foundPath) {
-            frontierA = neighborsOf(frontierA).slice(0, 15);
-            frontierB = neighborsOf(frontierB).slice(0, 15);
+            frontierA = neighborsOf(frontierA).slice(0, 10);
+            frontierB = neighborsOf(frontierB).slice(0, 10);
           }
         }
       }
