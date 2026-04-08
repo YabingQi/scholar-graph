@@ -265,9 +265,9 @@ button:disabled {
   font-size: 0.78rem;
   color: #e0e0e0;
   line-height: 1.5;
-  max-width: 220px;
-  z-index: 10;
   white-space: nowrap;
+  width: max-content;
+  z-index: 10;
 }
 
 /* ── Main graph area ────────────────────────────────────────────────── */

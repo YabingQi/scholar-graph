@@ -134,8 +134,12 @@ const Graph = forwardRef(function Graph({ nodes, edges, pathNodeIds, onNodeClick
     cy.on("mousemove", "node", (evt) => {
       const { x, y } = evt.originalEvent;
       const rect = containerRef.current.getBoundingClientRect();
-      tooltip.style.left = `${x - rect.left + 12}px`;
-      tooltip.style.top  = `${y - rect.top  + 12}px`;
+      const tw = tooltip.offsetWidth;
+      const th = tooltip.offsetHeight;
+      const left = Math.min(x - rect.left + 12, rect.width - tw - 8);
+      const top  = Math.min(y - rect.top  + 12, rect.height - th - 8);
+      tooltip.style.left = `${left}px`;
+      tooltip.style.top  = `${top}px`;
     });
     cy.on("mouseout", "node", () => { tooltip.style.display = "none"; });
 
