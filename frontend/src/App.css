@@ -1,0 +1,294 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: system-ui, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+}
+
+.app {
+  display: flex;
+  height: 100vh;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+
+.sidebar {
+  width: 320px;
+  min-width: 280px;
+  background: #16213e;
+  border-right: 1px solid #0f3460;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 16px;
+  overflow-y: auto;
+}
+
+.title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #4f8ef7;
+  letter-spacing: 0.5px;
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.tab {
+  flex: 1;
+  padding: 6px 0;
+  border-radius: 6px;
+  border: 1px solid #0f3460;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.tab.active {
+  background: #4f8ef7;
+  color: #fff;
+  border-color: #4f8ef7;
+}
+
+/* ── Panel ──────────────────────────────────────────────────────────── */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hint {
+  font-size: 0.78rem;
+  color: #666;
+  line-height: 1.4;
+}
+
+/* ── Find in graph ──────────────────────────────────────────────────── */
+
+.find-in-graph {
+  position: relative;
+}
+
+.find-in-graph input {
+  width: 100%;
+  background: #0f3460;
+  border-color: #4f8ef7;
+}
+
+.find-in-graph .no-match {
+  padding: 8px 10px;
+  color: #666;
+  font-size: 0.78rem;
+  font-style: italic;
+  cursor: default;
+}
+
+/* ── Search bar ─────────────────────────────────────────────────────── */
+
+.search-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #0f3460;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+input[type="text"]:focus {
+  border-color: #4f8ef7;
+}
+
+button {
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: none;
+  background: #4f8ef7;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+button:hover:not(:disabled) {
+  background: #3a7ae8;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Search results ─────────────────────────────────────────────────── */
+
+.search-results {
+  list-style: none;
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  overflow: hidden;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.search-results li {
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 1px solid #0f3460;
+  transition: background 0.15s;
+}
+
+.search-results li:last-child {
+  border-bottom: none;
+}
+
+.search-results li:hover {
+  background: #0f3460;
+}
+
+.search-results strong {
+  font-size: 0.85rem;
+}
+
+.meta {
+  font-size: 0.72rem;
+  color: #888;
+}
+
+/* ── Path Finder ──────────────────────────────────────────────────────── */
+
+.path-finder {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.path-finder h3 {
+  font-size: 0.9rem;
+  color: #aaa;
+}
+
+.path-input {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #0f3460;
+}
+
+.selected-badge {
+  font-size: 0.78rem;
+  color: #4f8ef7;
+  padding: 2px 6px;
+  border: 1px solid #4f8ef7;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+
+.find-btn {
+  margin-top: 4px;
+  background: #f7914f;
+}
+
+.find-btn:hover:not(:disabled) {
+  background: #e07a3a;
+}
+
+.path-result {
+  font-size: 0.9rem;
+  color: #f7914f;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ── Misc ─────────────────────────────────────────────────────────────── */
+
+.error {
+  font-size: 0.78rem;
+  color: #f47;
+}
+
+.status {
+  font-size: 0.78rem;
+  color: #888;
+}
+
+.reset-btn {
+  background: transparent;
+  border: 1px solid #f47;
+  color: #f47;
+  margin-top: auto;
+}
+
+.reset-btn:hover {
+  background: #f47;
+  color: #fff;
+}
+
+/* ── Node tooltip ────────────────────────────────────────────────────── */
+
+.cy-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: #0f3460;
+  border: 1px solid #4f8ef7;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 0.78rem;
+  color: #e0e0e0;
+  line-height: 1.5;
+  max-width: 220px;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+/* ── Main graph area ────────────────────────────────────────────────── */
+
+.main {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.graph-container {
+  width: 100%;
+  height: 100%;
+}
+
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #444;
+  font-size: 1rem;
+}
