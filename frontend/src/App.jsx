@@ -24,12 +24,19 @@ export default function App() {
     const centerNode = data.nodes.find((n) => n.id === authorId);
     const centerName = centerNode?.label || authorId;
     setNodes((prev) => {
-      const existing = new Set(prev.map((n) => n.id));
-      // Tag new coauthor nodes with who they were expanded from
+      const existing = new Map(prev.map((n) => [n.id, n]));
+      // Center node: mark expanded, update with fresh data (real paperCount + affiliation)
       const newNodes = data.nodes
         .filter((n) => !existing.has(n.id))
-        .map((n) => n.id === authorId ? n : { ...n, expandedFrom: centerName });
-      const updated = prev.map((n) => ({ ...n, center: n.id === authorId }));
+        .map((n) => n.id === authorId ? { ...n, expanded: true } : { ...n, expandedFrom: centerName });
+      const updated = prev.map((n) => {
+        if (n.id === authorId) {
+          // Merge fresh center data (real paperCount, affiliation) and mark expanded
+          const fresh = data.nodes.find((d) => d.id === authorId);
+          return { ...n, ...(fresh || {}), center: true, expanded: true };
+        }
+        return { ...n, center: false };
+      });
       return [...updated, ...newNodes];
     });
     setEdges((prev) => {
