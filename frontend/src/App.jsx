@@ -136,14 +136,22 @@ export default function App() {
       foundPath = tryBFS();
 
       if (!foundPath) {
-        // Levels 1–3: expand frontier from each side, up to 3 rounds
+        // Bidirectional expansion: always expand the smaller frontier next
         let frontierA = (dataA?.nodes || []).filter(n => n.id !== srcId).slice(0, 20).map(n => n.id);
         let frontierB = (dataB?.nodes || []).filter(n => n.id !== tgtId).slice(0, 20).map(n => n.id);
 
         for (let level = 1; level <= 3 && !foundPath; level++) {
+          // Pick the smaller frontier to expand first, then the larger
+          const ordered = frontierA.length <= frontierB.length
+            ? [frontierA, frontierB]
+            : [frontierB, frontierA];
+
           setStatus(`Searching deeper… (level ${level}/3)`);
-          await Promise.all([...frontierA, ...frontierB].map(expand));
-          foundPath = tryBFS();
+          for (const frontier of ordered) {
+            await Promise.all(frontier.map(expand));
+            foundPath = tryBFS();
+            if (foundPath) break;
+          }
           if (!foundPath) {
             frontierA = neighborsOf(frontierA).slice(0, 15);
             frontierB = neighborsOf(frontierB).slice(0, 15);
