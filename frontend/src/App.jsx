@@ -98,20 +98,14 @@ export default function App() {
   const handleFindPath = useCallback(async (srcAuthor, tgtAuthor, onResult) => {
     const srcId = srcAuthor.authorId;
     const tgtId = tgtAuthor.authorId;
-    const nodeIdSet = new Set(nodes.map(n => n.id));
     setPathNodeIds([]);
     setLoading(true);
 
     try {
-      // Expand missing authors (up to 2 concurrent fetches)
-      const toExpand = [];
-      if (!nodeIdSet.has(srcId)) toExpand.push(expandAuthorData(srcId));
-      if (!nodeIdSet.has(tgtId)) toExpand.push(expandAuthorData(tgtId));
-
-      if (toExpand.length > 0) {
-        setStatus("Loading author networks…");
-        await Promise.all(toExpand);
-      }
+      // Always expand both authors to ensure complete, consistent edge data.
+      // (Search API PIDs vs XML PIDs can differ; re-expanding guarantees graph is fresh.)
+      setStatus("Loading author networks…");
+      await Promise.all([expandAuthorData(srcId), expandAuthorData(tgtId)]);
 
       // Use edgesRef for up-to-date edge list (setEdges is async)
       const path = bfsOnEdges(edgesRef.current, srcId, tgtId);
