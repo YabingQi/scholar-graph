@@ -103,21 +103,25 @@ const Graph = forwardRef(function Graph({ nodes, edges, pathNodeIds, onNodeClick
 
     cy.on("mouseover", "node", (evt) => {
       const d = evt.target.data();
-      // Expanded nodes: show total papers. Coauthor-only nodes: show shared papers with context.
+      // Expanded nodes: show total papers.
+      // Coauthor-only nodes: list shared paper counts per connected expanded node.
       let paperLine;
       if (d.expanded) {
         paperLine = `📄 ${d.paperCount ?? "?"} papers total`;
-      } else if (d.sharedPapers != null) {
-        const connectedCenters = evt.target.connectedEdges()
-          .connectedNodes()
-          .filter((n) => n.data("center") || n.data("expanded"))
-          .map((n) => n.data("label"));
-        const centerName = connectedCenters.length === 1 ? connectedCenters[0] : (d.expandedFrom || null);
-        paperLine = centerName
-          ? `📄 ${d.sharedPapers} shared papers<br>↳ with ${centerName}`
-          : `📄 ${d.sharedPapers} shared papers`;
       } else {
-        paperLine = `📄 ${d.paperCount ?? "?"} papers`;
+        const sharedLines = [];
+        evt.target.connectedEdges().forEach((edge) => {
+          const other = edge.source().id() === evt.target.id() ? edge.target() : edge.source();
+          if (other.data("center") || other.data("expanded")) {
+            const w = edge.data("weight") ?? "?";
+            sharedLines.push(`↳ ${w} papers with ${other.data("label")}`);
+          }
+        });
+        if (sharedLines.length > 0) {
+          paperLine = `📄 shared papers:<br>${sharedLines.join("<br>")}`;
+        } else {
+          paperLine = `📄 ${d.paperCount ?? "?"} papers`;
+        }
       }
       const lines = [
         `<strong>${d.label}</strong>`,
