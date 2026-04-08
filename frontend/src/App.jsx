@@ -163,7 +163,7 @@ export default function App() {
 
         {activeTab === "explore" && (
           <div className="panel">
-            <p className="hint">Search a professor to build the graph. Click a node to expand.</p>
+            <p className="hint">Search a researcher to build the graph. Click a node to expand.</p>
             <SearchBar onSelect={expandAuthor} />
           </div>
         )}
@@ -196,7 +196,7 @@ export default function App() {
       <main className="main">
         {nodes.length === 0 ? (
           <div className="empty-state">
-            <p>Search for a professor to start exploring the collaboration graph.</p>
+            <p>Search for a researcher to start exploring the collaboration graph.</p>
           </div>
         ) : (
           <Graph

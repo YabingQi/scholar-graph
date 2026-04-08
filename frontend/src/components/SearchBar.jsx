@@ -36,7 +36,7 @@ export default function SearchBar({ onSelect }) {
       <form onSubmit={handleSearch} className="search-form">
         <input
           type="text"
-          placeholder="Professor name"
+          placeholder="Researcher name"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
