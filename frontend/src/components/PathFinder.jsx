@@ -7,26 +7,27 @@ export default function PathFinder({ onFindPath, loading }) {
     { name: "", affiliation: "", selected: null },
   ]);
   const [results, setResults] = useState([null, null]);
+  const [searching, setSearching] = useState([false, false]);
   const [pathInfo, setPathInfo] = useState(null);
   const [error, setError] = useState("");
 
   async function handleSearch(idx) {
     const q = queries[idx];
     if (!q.name.trim()) return;
-    const data = await searchAuthors(q.name.trim(), q.affiliation.trim());
-    const newResults = [...results];
-    newResults[idx] = data.results || [];
-    setResults(newResults);
+    setSearching((s) => s.map((v, i) => (i === idx ? true : v)));
+    try {
+      const data = await searchAuthors(q.name.trim(), q.affiliation.trim());
+      setResults((r) => r.map((v, i) => (i === idx ? (data.results || []) : v)));
+    } catch {
+      setError("Search failed. Is the backend running?");
+    } finally {
+      setSearching((s) => s.map((v, i) => (i === idx ? false : v)));
+    }
   }
 
   function handleSelect(idx, author) {
-    const newQueries = queries.map((q, i) =>
-      i === idx ? { ...q, selected: author } : q
-    );
-    const newResults = [...results];
-    newResults[idx] = null;
-    setQueries(newQueries);
-    setResults(newResults);
+    setQueries((prev) => prev.map((q, i) => i === idx ? { ...q, selected: author } : q));
+    setResults((r) => r.map((v, i) => (i === idx ? null : v)));
   }
 
   async function handleFindPath() {
@@ -39,7 +40,7 @@ export default function PathFinder({ onFindPath, loading }) {
     setPathInfo(null);
     await onFindPath(a.selected, b.selected, (data) => {
       if (!data) {
-        setError("No path found. Try expanding more nodes in the graph.");
+        setError("No path found in the loaded graph.");
       } else {
         setPathInfo(data);
       }
@@ -47,8 +48,11 @@ export default function PathFinder({ onFindPath, loading }) {
   }
 
   function updateQuery(idx, field, value) {
-    setQueries(queries.map((q, i) => (i === idx ? { ...q, [field]: value, selected: null } : q)));
+    setQueries((prev) => prev.map((q, i) => (i === idx ? { ...q, [field]: value, selected: null } : q)));
+    setResults((r) => r.map((v, i) => (i === idx ? null : v)));
   }
+
+  const busy = loading || searching.some(Boolean);
 
   return (
     <div className="path-finder">
@@ -60,13 +64,18 @@ export default function PathFinder({ onFindPath, loading }) {
             value={queries[idx].name}
             onChange={(e) => updateQuery(idx, "name", e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch(idx)}
+            disabled={busy}
           />
           <input
             placeholder="School (optional)"
             value={queries[idx].affiliation}
             onChange={(e) => updateQuery(idx, "affiliation", e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch(idx)}
+            disabled={busy}
           />
-          <button onClick={() => handleSearch(idx)}>Search</button>
+          <button onClick={() => handleSearch(idx)} disabled={busy}>
+            {searching[idx] ? "Searching…" : "Search"}
+          </button>
           {queries[idx].selected && (
             <span className="selected-badge">{queries[idx].selected.name}</span>
           )}
@@ -85,8 +94,8 @@ export default function PathFinder({ onFindPath, loading }) {
         </div>
       ))}
 
-      <button onClick={handleFindPath} disabled={loading} className="find-btn">
-        {loading ? "Loading…" : "Find shortest path"}
+      <button onClick={handleFindPath} disabled={busy} className="find-btn">
+        {loading ? "Loading networks…" : "Find shortest path"}
       </button>
 
       {error && <p className="error">{error}</p>}
