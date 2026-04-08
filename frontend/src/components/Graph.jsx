@@ -103,8 +103,14 @@ const Graph = forwardRef(function Graph({ nodes, edges, pathNodeIds, onNodeClick
 
     cy.on("mouseover", "node", (evt) => {
       const d = evt.target.data();
-      const paperLine = d.sharedPapers != null && d.expandedFrom
-        ? `📄 ${d.sharedPapers} papers with ${d.expandedFrom}`
+      // Find connected center node (if any) for context
+      const connectedCenters = evt.target.connectedEdges()
+        .connectedNodes()
+        .filter((n) => n.data("center"))
+        .map((n) => n.data("label"));
+      const centerName = connectedCenters.length === 1 ? connectedCenters[0] : (d.expandedFrom || null);
+      const paperLine = d.sharedPapers != null && centerName
+        ? `📄 ${d.sharedPapers} shared papers with ${centerName}`
         : `📄 ${d.paperCount ?? "?"} papers`;
       const lines = [
         `<strong>${d.label}</strong>`,
