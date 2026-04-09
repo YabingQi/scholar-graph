@@ -10,7 +10,7 @@ BACKEND_PID=$!
 
 echo "Starting frontend..."
 cd "$ROOT/frontend"
-/opt/homebrew/bin/npm run dev &
+npm run dev &
 FRONTEND_PID=$!
 
 echo ""

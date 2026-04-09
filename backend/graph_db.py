@@ -37,28 +37,36 @@ def neighbors(pid: str) -> list[str]:
     return [r[0] for r in rows]
 
 
-def find_path(source_id: str, target_id: str, max_depth: int = 6) -> list[str] | None:
+def find_path(source_id: str, target_id: str, max_depth: int = 8) -> list[str] | None:
     """
     BFS shortest path using local SQLite graph.
     Returns path as list of PIDs, or None if not found within max_depth.
+    Uses parent-pointer tracking (O(V) space) instead of storing full paths in
+    the queue (O(V * depth) space).
     Runs entirely locally — no DBLP API calls.
     """
     if source_id == target_id:
         return [source_id]
 
-    visited = {source_id}
-    queue: deque[list[str]] = deque([[source_id]])
+    # parent[node] = the node we came from (None for source)
+    parent: dict[str, str | None] = {source_id: None}
+    queue: deque[tuple[str, int]] = deque([(source_id, 0)])
 
     while queue:
-        path = queue.popleft()
-        if len(path) > max_depth:
-            break
-        for nb in neighbors(path[-1]):
+        node, depth = queue.popleft()
+        if depth >= max_depth:
+            continue
+        for nb in neighbors(node):
+            if nb in parent:
+                continue
+            parent[nb] = node
             if nb == target_id:
-                return path + [nb]
-            if nb not in visited:
-                visited.add(nb)
-                queue.append(path + [nb])
+                # Reconstruct path by following parent pointers
+                path = [nb]
+                while path[-1] != source_id:
+                    path.append(parent[path[-1]])  # type: ignore[arg-type]
+                return list(reversed(path))
+            queue.append((nb, depth + 1))
 
     return None
 

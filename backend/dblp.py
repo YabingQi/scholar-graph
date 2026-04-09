@@ -13,12 +13,23 @@ from typing import Optional
 import httpx
 
 BASE = "https://dblp.org"
-UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+UA = "scholar-graph/1.0 (https://github.com/YabingQi/scholar-graph; bot)"
 
 # Shared async HTTP/2 client — reuses connections across requests
 _client: httpx.AsyncClient | None = None
 # Semaphore: max 5 concurrent DBLP requests (HTTP/2 multiplexing handles this well)
 _sem = asyncio.Semaphore(5)
+
+_CACHE_MAX = 1000  # max entries per in-memory cache
+
+
+def _evict(cache: dict) -> None:
+    """Drop the oldest half of the cache when it exceeds _CACHE_MAX."""
+    if len(cache) >= _CACHE_MAX:
+        keep = list(cache.keys())[_CACHE_MAX // 2:]
+        for k in list(cache.keys()):
+            if k not in keep:
+                del cache[k]
 
 
 def _get_client() -> httpx.AsyncClient:
@@ -105,6 +116,7 @@ async def search_authors(name: str, affiliation: Optional[str] = None, limit: in
         filtered = [a for a in authors if any(aff_lower in s.lower() for s in a["affiliations"])]
         authors = filtered if filtered else authors
 
+    _evict(_search_cache)
     _search_cache[cache_key] = authors
     return authors
 
@@ -116,6 +128,7 @@ _xml_cache: dict[str, ET.Element] = {}
 
 async def _get_xml(author_id: str) -> ET.Element:
     if author_id not in _xml_cache:
+        _evict(_xml_cache)
         _xml_cache[author_id] = ET.fromstring(await _afetch(f"{BASE}/pid/{author_id}.xml"))
     return _xml_cache[author_id]
 
