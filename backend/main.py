@@ -5,7 +5,7 @@ from typing import Optional
 import asyncio
 
 from dblp import search_authors, get_author, get_coauthors
-from graph import find_path
+import graph_db
 
 app = FastAPI(title="Scholar Graph API")
 
@@ -44,10 +44,7 @@ async def author_detail(author_id: str):
 
 @app.get("/api/coauthors/{author_id:path}")
 async def coauthors(author_id: str):
-    """
-    Return the center author + ALL their co-authors as graph nodes/edges.
-    Scans up to 500 papers.
-    """
+    """Return the center author + ALL their co-authors as graph nodes/edges."""
     (collaborators, cross_edges), author = await asyncio.gather(
         get_coauthors(author_id, top_n=0),
         get_author(author_id),
@@ -69,7 +66,6 @@ async def coauthors(author_id: str):
         })
 
     edges.extend(cross_edges)
-
     return {"nodes": nodes, "edges": edges}
 
 
@@ -78,22 +74,66 @@ async def coauthors(author_id: str):
 class PathRequest(BaseModel):
     source_id: str
     target_id: str
-    max_depth: int = 4
+    max_depth: int = 6
 
 
 @app.post("/api/path")
 async def shortest_path(req: PathRequest):
-    """Find the shortest collaboration path between two authors."""
-    path_ids = await find_path(req.source_id, req.target_id, req.max_depth)
+    """
+    Find the shortest collaboration path between two authors.
+    Uses local SQLite graph if available (fast, no rate limits).
+    Returns 503 with instructions if DB not built yet.
+    """
+    if not graph_db.db_available():
+        raise HTTPException(
+            status_code=503,
+            detail="Local graph DB not built yet. Run: python build_graph.py"
+        )
+
+    # Run blocking BFS in a thread so it doesn't block the event loop
+    loop = asyncio.get_event_loop()
+    path_ids = await loop.run_in_executor(
+        None, graph_db.find_path, req.source_id, req.target_id, req.max_depth
+    )
+
     if path_ids is None:
         raise HTTPException(status_code=404, detail="No path found within depth limit")
 
-    # Fetch details for each node in path
-    authors = await asyncio.gather(*[get_author(aid) for aid in path_ids])
+    # Fetch full details only for the two endpoints; use local DB for intermediates
+    endpoints = await asyncio.gather(
+        get_author(path_ids[0]),
+        get_author(path_ids[-1]),
+        return_exceptions=True,
+    )
+
+    nodes = []
+    for i, pid in enumerate(path_ids):
+        is_endpoint = i == 0 or i == len(path_ids) - 1
+        if is_endpoint:
+            a = endpoints[0] if i == 0 else endpoints[-1]
+            if isinstance(a, Exception):
+                label = graph_db.get_name(pid) or pid
+                nodes.append({"id": pid, "label": label, "affiliation": "", "paperCount": 0, "center": False})
+            else:
+                nodes.append(_author_to_node(a))
+        else:
+            # Intermediate node: use local DB name only, no API call
+            label = graph_db.get_name(pid) or pid
+            nodes.append({"id": pid, "label": label, "affiliation": "", "paperCount": 0, "center": False})
+
     return {
         "path": path_ids,
         "degrees": len(path_ids) - 1,
-        "nodes": [_author_to_node(a) for a in authors],
+        "nodes": nodes,
+    }
+
+
+@app.get("/api/db-status")
+async def db_status():
+    """Check whether the local graph DB is available and when it was built."""
+    return {
+        "available": graph_db.db_available(),
+        "built_at": graph_db.db_built_at(),
     }
 
 
@@ -108,7 +148,6 @@ def _author_to_node(author: dict, center: bool = False) -> dict:
         "paperCount": author.get("paperCount", 0),
         "center": center,
     }
-    # sharedPapers: only present on coauthor nodes (not center)
     shared = author.get("sharedPapers")
     if shared is not None and not center:
         node["sharedPapers"] = shared

@@ -1,65 +1,75 @@
 # Scholar Graph
 
-An interactive collaboration graph explorer for CS researchers, powered by [DBLP](https://dblp.org).
-
-Search any CS professor, visualize their co-author network, expand nodes to explore further, and find degrees of separation between any two researchers.
+An interactive CS collaboration graph explorer powered by [DBLP](https://dblp.org). Search researchers, explore coauthor networks, and find the shortest path between any two people in computer science.
 
 ![Scholar Graph](https://img.shields.io/badge/data-DBLP-blue) ![Python](https://img.shields.io/badge/backend-FastAPI-green) ![React](https://img.shields.io/badge/frontend-React-61dafb)
 
 ## Features
 
-- **Author search** — search by name + optional institution filter
-- **Collaboration graph** — click any node to expand their co-author network; nodes sized by paper count
-- **Cross-edges** — edges between any two co-authors who share a paper, not just center-to-coauthor
-- **Hover tooltips** — shows affiliation and number of shared papers with the expanded author
-- **Find in graph** — fuzzy search within already-loaded nodes, animates to the result
-- **Find Path (In Graph)** — instant BFS shortest path between any two people already in the graph
-- **Find Path (auto-expand)** — search any two researchers; automatically loads their networks and finds the connection
-- Drag to rearrange nodes; layout re-runs smoothly when new nodes are added
+- **Author search** — search any CS researcher by name
+- **Collaboration graph** — click any node to expand their coauthor network; nodes sized by paper count
+- **Hover tooltips** — shows affiliation and shared paper counts
+- **Find in graph** — fuzzy search within already-loaded nodes
+- **Find Path** — find shortest collaboration path between any two researchers (instant, fully local BFS on 30M coauthor pairs)
 
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Backend | Python 3.11+, FastAPI, httpx (HTTP/2) |
-| Data | DBLP official API (`/pid/{id}.xml`, `/search/author/api`) |
-| Frontend | React 18, Cytoscape.js (cose layout) |
-| Graph rendering | Cytoscape.js |
-
-## Getting Started
+## Setup
 
 ### Prerequisites
 
 - Python 3.11+
 - Node.js 18+
 
-### Install & Run
+### 1. Clone
 
 ```bash
-# Clone
 git clone https://github.com/YabingQi/scholar-graph.git
 cd scholar-graph
+```
 
-# Backend
+### 2. Backend
+
+```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-pip install fastapi "uvicorn[standard]" "httpx[http2]"
-uvicorn main:app --reload --port 8000
+pip install fastapi "uvicorn[standard]" "httpx[http2]" lxml
+```
 
-# Frontend (new terminal)
+### 3. Build the local graph database
+
+The graph database (~5.6 GB) is not included in the repo. Build it with:
+
+```bash
+python3 build_graph.py
+```
+
+This will automatically:
+1. Download the DBLP XML dump (~1 GB compressed) from `dblp.org`
+2. Parse ~7 million publications
+3. Build a SQLite coauthor graph with ~30 million pairs
+
+**Expected time:** ~5 min to download, ~5 hours to parse. The database is cached locally and auto-refreshed weekly. Find Path requires it; search and graph exploration work without it.
+
+### 4. Frontend
+
+```bash
 cd frontend
 npm install
+```
+
+### 5. Run
+
+**Backend** (in `backend/`):
+```bash
+uvicorn main:app --reload --port 8000
+```
+
+**Frontend** (in `frontend/`):
+```bash
 npm run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173).
-
-Alternatively, use the convenience script (after setting up both environments):
-
-```bash
-./start.sh
-```
 
 ## Project Structure
 
@@ -68,7 +78,8 @@ scholar-graph/
 ├── backend/
 │   ├── main.py          # FastAPI routes
 │   ├── dblp.py          # DBLP API client (HTTP/2, caching)
-│   └── graph.py         # Bidirectional BFS path finder
+│   ├── graph_db.py      # Local SQLite BFS path finder
+│   └── build_graph.py   # Download + parse DBLP dump → SQLite
 └── frontend/
     └── src/
         ├── App.jsx
@@ -76,13 +87,11 @@ scholar-graph/
         └── components/
             ├── Graph.jsx        # Cytoscape graph
             ├── SearchBar.jsx    # Author search
-            ├── PathFinder.jsx   # Find path (auto-expand)
-            ├── GraphPath.jsx    # Find path (in-graph only)
+            ├── PathFinder.jsx   # Find path
+            ├── GraphPath.jsx    # In-graph path finder
             └── FindInGraph.jsx  # Search within loaded graph
 ```
 
 ## Data Source
 
-All data comes from the [DBLP Computer Science Bibliography](https://dblp.org) via their official API. DBLP covers CS publications only, which keeps results clean and avoids cross-discipline author confusion.
-
-No API key required.
+All data comes from the [DBLP Computer Science Bibliography](https://dblp.org) via their official API and XML dump. No API key required.

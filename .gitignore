@@ -11,3 +11,6 @@ dist/
 
 # Env
 .env
+
+# DBLP data files (too large for GitHub — regenerate with build_graph.py)
+backend/data/

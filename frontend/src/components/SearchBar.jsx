@@ -3,7 +3,6 @@ import { searchAuthors } from "../api/client";
 
 export default function SearchBar({ onSelect }) {
   const [name, setName] = useState("");
-  const [affiliation, setAffiliation] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -14,7 +13,7 @@ export default function SearchBar({ onSelect }) {
     setLoading(true);
     setError("");
     try {
-      const data = await searchAuthors(name.trim(), affiliation.trim());
+      const data = await searchAuthors(name.trim());
       setResults(data.results || []);
       if (!data.results?.length) setError("No authors found.");
     } catch {
@@ -27,7 +26,6 @@ export default function SearchBar({ onSelect }) {
   function handleSelect(author) {
     setResults([]);
     setName("");
-    setAffiliation("");
     onSelect(author);
   }
 
@@ -40,13 +38,7 @@ export default function SearchBar({ onSelect }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <input
-          type="text"
-          placeholder="School / affiliation (optional)"
-          value={affiliation}
-          onChange={(e) => setAffiliation(e.target.value)}
-        />
-        <button type="submit" disabled={loading}>
+<button type="submit" disabled={loading}>
           {loading ? "Searching…" : "Search"}
         </button>
       </form>
@@ -54,17 +46,16 @@ export default function SearchBar({ onSelect }) {
       {error && <p className="error">{error}</p>}
 
       {results.length > 0 && (
-        <ul className="search-results">
-          {results.map((a) => (
-            <li key={a.authorId} onClick={() => handleSelect(a)}>
-              <strong>{a.name}</strong>
-              <span className="meta">
-                {(a.affiliations || []).join(", ") || "Unknown affiliation"} ·{" "}
-                {a.paperCount ?? "?"} papers · h-index {a.hIndex ?? "?"}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="search-hint">If multiple people share a name, the number suffix (e.g. 0001, 0002) disambiguates them — verify on <a href="https://dblp.org" target="_blank" rel="noreferrer">dblp.org</a>.</p>
+          <ul className="search-results">
+            {results.map((a) => (
+              <li key={a.authorId} onClick={() => handleSelect(a)}>
+                <strong>{a.name}</strong>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );

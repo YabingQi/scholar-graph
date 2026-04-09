@@ -147,6 +147,14 @@ button:disabled {
 
 /* ── Search results ─────────────────────────────────────────────────── */
 
+.search-hint {
+  font-size: 0.72rem;
+  color: #7a8fa6;
+  margin: 4px 0 6px;
+  line-height: 1.4;
+}
+.search-hint a { color: #4f8ef7; }
+
 .search-results {
   list-style: none;
   border: 1px solid #0f3460;

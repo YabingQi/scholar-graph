@@ -4,7 +4,7 @@ import Graph from "./components/Graph";
 import PathFinder from "./components/PathFinder";
 import FindInGraph from "./components/FindInGraph";
 import GraphPath from "./components/GraphPath";
-import { getCoauthors } from "./api/client";
+import { getCoauthors, findPath } from "./api/client";
 import "./App.css";
 
 export default function App() {
@@ -68,107 +68,63 @@ export default function App() {
     }
   }, [expandAuthorData]);
 
-  // Client-side BFS on an edge list
-  function bfsOnEdges(edgeList, sourceId, targetId) {
-    const adj = {};
-    for (const e of edgeList) {
-      (adj[e.source] = adj[e.source] || []).push(e.target);
-      (adj[e.target] = adj[e.target] || []).push(e.source);
-    }
-    if (sourceId === targetId) return [sourceId];
-    const visited = new Set([sourceId]);
-    const queue = [[sourceId]];
-    while (queue.length) {
-      const path = queue.shift();
-      const cur = path[path.length - 1];
-      for (const nb of (adj[cur] || [])) {
-        if (nb === targetId) return [...path, nb];
-        if (!visited.has(nb)) { visited.add(nb); queue.push([...path, nb]); }
-      }
-    }
-    return null;
-  }
-
-  // Called by PathFinder: iterative bidirectional expansion, up to 3 levels each side
+  // Called by PathFinder: use server-side SQLite BFS, then expand endpoints only
   const handleFindPath = useCallback(async (srcAuthor, tgtAuthor, onResult) => {
     const srcId = srcAuthor.authorId;
     const tgtId = tgtAuthor.authorId;
     setPathNodeIds([]);
     setLoading(true);
 
-    // Local edge accumulator — not subject to React state flush timing
-    const localEdgeMap = new Map(edgesRef.current.map(e => [e.id, e]));
-    const expandedNodes = new Set();
-
-    function addEdges(edges) {
-      for (const e of edges) {
-        const rev = `${e.target}-${e.source}`;
-        if (!localEdgeMap.has(e.id) && !localEdgeMap.has(rev)) localEdgeMap.set(e.id, e);
-      }
-    }
-
-    async function expand(id) {
-      if (expandedNodes.has(id)) return null;
-      expandedNodes.add(id);
-      const data = await expandAuthorData(id);
-      addEdges(data.edges);
-      return data;
-    }
-
-    function tryBFS() {
-      return bfsOnEdges([...localEdgeMap.values()], srcId, tgtId);
-    }
-
-    function neighborsOf(ids) {
-      const adj = {};
-      for (const e of localEdgeMap.values()) {
-        (adj[e.source] = adj[e.source] || []).push(e.target);
-        (adj[e.target] = adj[e.target] || []).push(e.source);
-      }
-      return [...new Set(ids.flatMap(id => adj[id] || []))].filter(id => !expandedNodes.has(id));
-    }
-
-    let foundPath = null;
     try {
-      // Level 0: expand both authors
+      // Step 1: expand both endpoints in parallel (shows their full networks)
       setStatus("Loading both author networks…");
-      const [dataA, dataB] = await Promise.all([expand(srcId), expand(tgtId)]);
-      foundPath = tryBFS();
+      await Promise.all([expandAuthorData(srcId), expandAuthorData(tgtId)]);
 
-      if (!foundPath) {
-        // Bidirectional expansion: always expand the smaller frontier next
-        let frontierA = (dataA?.nodes || []).filter(n => n.id !== srcId).slice(0, 15).map(n => n.id);
-        let frontierB = (dataB?.nodes || []).filter(n => n.id !== tgtId).slice(0, 15).map(n => n.id);
+      // Step 2: find path via server SQLite BFS (pure local, no extra API calls)
+      setStatus("Finding path…");
+      const result = await findPath(srcId, tgtId);
 
-        for (let level = 1; level <= 3 && !foundPath; level++) {
-          // Pick the smaller frontier to expand first, then the larger
-          const ordered = frontierA.length <= frontierB.length
-            ? [frontierA, frontierB]
-            : [frontierB, frontierA];
-
-          setStatus(`Searching deeper… (level ${level}/3)`);
-          for (const frontier of ordered) {
-            await Promise.all(frontier.map(expand));
-            foundPath = tryBFS();
-            if (foundPath) break;
-          }
-          if (!foundPath) {
-            frontierA = neighborsOf(frontierA).slice(0, 10);
-            frontierB = neighborsOf(frontierB).slice(0, 10);
-          }
-        }
-      }
-
-      if (foundPath) {
-        setStatus(`${foundPath.length - 1} degree${foundPath.length - 1 !== 1 ? "s" : ""} of separation.`);
-        onResult({ path: foundPath, degrees: foundPath.length - 1, nodes: [] });
-        setPathNodeIds(foundPath);
-      } else {
-        setStatus("No path found within 3 levels — these two may be too far apart.");
+      if (!result) {
+        setStatus("No path found within depth limit.");
         onResult(null);
+        return;
       }
-    } catch {
-      setStatus("Failed to load author data.");
+
+      const { path, degrees, nodes: pathNodes } = result;
+
+      // Step 3: add intermediate path nodes (name-only from local DB) and connecting edges
+      setNodes((prev) => {
+        const existing = new Map(prev.map((n) => [n.id, n]));
+        const toAdd = pathNodes.filter((n) => !existing.has(n.id));
+        return [...prev, ...toAdd];
+      });
+
+      const pathEdges = [];
+      for (let i = 0; i < path.length - 1; i++) {
+        const id = `${path[i]}-${path[i + 1]}`;
+        pathEdges.push({ id, source: path[i], target: path[i + 1], weight: 1 });
+      }
+      setEdges((prev) => {
+        const existing = new Set(prev.map((e) => e.id));
+        const newEdges = pathEdges.filter((e) => {
+          const rev = `${e.target}-${e.source}`;
+          return !existing.has(e.id) && !existing.has(rev);
+        });
+        const merged = [...prev, ...newEdges];
+        edgesRef.current = merged;
+        return merged;
+      });
+
+      setStatus(`${degrees} degree${degrees !== 1 ? "s" : ""} of separation.`);
+      onResult(result);
+      setPathNodeIds(path);
+    } catch (err) {
+      const msg = err?.message || "";
+      if (msg.includes("503") || msg.includes("not built")) {
+        setStatus("Path DB not available. Run: python build_graph.py");
+      } else {
+        setStatus("Path search failed.");
+      }
       onResult(null);
     } finally {
       setLoading(false);
