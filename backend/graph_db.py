@@ -63,6 +63,63 @@ def find_path(source_id: str, target_id: str, max_depth: int = 6) -> list[str] |
     return None
 
 
+def get_coauthors_local(pid: str) -> tuple[list[dict], list[dict]]:
+    """
+    Return coauthors and cross-edges for a given PID using the local SQLite DB.
+    Much faster than DBLP API. No affiliation data (use API for center node only).
+    """
+    con = get_con()
+    rows = con.execute(
+        "SELECT pid_b, weight FROM coauthors WHERE pid_a=? "
+        "UNION ALL "
+        "SELECT pid_a, weight FROM coauthors WHERE pid_b=?",
+        (pid, pid)
+    ).fetchall()
+
+    if not rows:
+        return [], []
+
+    coauthor_pids = [r[0] for r in rows]
+    weights = {r[0]: r[1] for r in rows}
+
+    # Get names from local DB
+    placeholders = ",".join("?" * len(coauthor_pids))
+    name_rows = con.execute(
+        f"SELECT pid, name FROM author_names WHERE pid IN ({placeholders})",
+        coauthor_pids
+    ).fetchall()
+    names = {r[0]: r[1] for r in name_rows}
+
+    coauthors = [
+        {
+            "authorId": p,
+            "name": names.get(p, p),
+            "affiliations": [],
+            "paperCount": weights[p],
+            "sharedPapers": weights[p],
+        }
+        for p in coauthor_pids
+    ]
+
+    # Cross-edges: edges between coauthors themselves
+    if len(coauthor_pids) > 1:
+        pid_set = set(coauthor_pids)
+        cross_rows = con.execute(
+            f"SELECT pid_a, pid_b, weight FROM coauthors "
+            f"WHERE pid_a IN ({placeholders}) AND pid_b IN ({placeholders})",
+            coauthor_pids + coauthor_pids
+        ).fetchall()
+        cross_edges = [
+            {"id": f"{r[0]}-{r[1]}", "source": r[0], "target": r[1], "weight": r[2]}
+            for r in cross_rows
+            if r[0] in pid_set and r[1] in pid_set
+        ]
+    else:
+        cross_edges = []
+
+    return coauthors, cross_edges
+
+
 def get_name(pid: str) -> str | None:
     """Return the display name for a PID from the local DB, or None."""
     try:

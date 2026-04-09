@@ -44,11 +44,27 @@ async def author_detail(author_id: str):
 
 @app.get("/api/coauthors/{author_id:path}")
 async def coauthors(author_id: str):
-    """Return the center author + ALL their co-authors as graph nodes/edges."""
-    (collaborators, cross_edges), author = await asyncio.gather(
-        get_coauthors(author_id, top_n=0),
-        get_author(author_id),
-    )
+    """Return the center author + ALL their co-authors as graph nodes/edges.
+    Coauthor list comes from local SQLite (fast). Center node affiliation/paperCount
+    comes from DBLP API (one request only).
+    """
+    if graph_db.db_available():
+        # Fast path: local DB for coauthor list + one API call for center node
+        loop = asyncio.get_event_loop()
+        collaborators, cross_edges = await loop.run_in_executor(
+            None, graph_db.get_coauthors_local, author_id
+        )
+        try:
+            author = await get_author(author_id)
+        except Exception:
+            author = {"authorId": author_id, "name": graph_db.get_name(author_id) or author_id,
+                      "affiliations": [], "paperCount": 0}
+    else:
+        # Fallback: full DBLP API (no local DB)
+        (collaborators, cross_edges), author = await asyncio.gather(
+            get_coauthors(author_id, top_n=0),
+            get_author(author_id),
+        )
 
     nodes = [_author_to_node(author, center=True)]
     edges = []

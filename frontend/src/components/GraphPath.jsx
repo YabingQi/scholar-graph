@@ -8,51 +8,34 @@ export default function GraphPath({ nodes, edges, onPathFound }) {
   const [error, setError] = useState("");
 
   function handleInput(idx, value) {
-    const q = queries.map((v, i) => (i === idx ? value : v));
-    setQueries(q);
+    setQueries((q) => q.map((v, i) => (i === idx ? value : v)));
     setResult(null);
     setError("");
 
     if (!value.trim()) {
-      const f = filtered.map((v, i) => (i === idx ? [] : v));
-      setFiltered(f);
+      setFiltered((f) => f.map((v, i) => (i === idx ? [] : v)));
       return;
     }
     const lower = value.toLowerCase();
-    const matches = nodes
-      .filter((n) => n.label.toLowerCase().includes(lower))
-      .slice(0, 8);
-    const f = filtered.map((v, i) => (i === idx ? matches : v));
-    setFiltered(f);
+    const matches = nodes.filter((n) => n.label.toLowerCase().includes(lower)).slice(0, 8);
+    setFiltered((f) => f.map((v, i) => (i === idx ? matches : v)));
   }
 
   function handleSelect(idx, node) {
-    const s = selected.map((v, i) => (i === idx ? node : v));
-    setSelected(s);
-    const q = queries.map((v, i) => (i === idx ? node.label : v));
-    setQueries(q);
-    const f = filtered.map((v, i) => (i === idx ? [] : v));
-    setFiltered(f);
+    setSelected((s) => s.map((v, i) => (i === idx ? node : v)));
+    setQueries((q) => q.map((v, i) => (i === idx ? node.label : v)));
+    setFiltered((f) => f.map((v, i) => (i === idx ? [] : v)));
   }
 
   function handleFind() {
     const [a, b] = selected;
-    if (!a || !b) {
-      setError("Please select both people.");
-      return;
-    }
-    if (a.id === b.id) {
-      setError("Same person!");
-      return;
-    }
+    if (!a || !b) { setError("Please select both people."); return; }
+    if (a.id === b.id) { setError("Same person!"); return; }
 
-    // BFS on current edges
     const adj = {};
     for (const e of edges) {
-      if (!adj[e.source]) adj[e.source] = [];
-      if (!adj[e.target]) adj[e.target] = [];
-      adj[e.source].push(e.target);
-      adj[e.target].push(e.source);
+      (adj[e.source] = adj[e.source] || []).push(e.target);
+      (adj[e.target] = adj[e.target] || []).push(e.source);
     }
 
     const visited = new Set([a.id]);
@@ -68,45 +51,74 @@ export default function GraphPath({ nodes, edges, onPathFound }) {
           onPathFound(fullPath);
           return;
         }
-        if (!visited.has(nb)) {
-          visited.add(nb);
-          queue.push([...path, nb]);
-        }
+        if (!visited.has(nb)) { visited.add(nb); queue.push([...path, nb]); }
       }
     }
-
     setError("No path found in the current graph.");
     setResult(null);
     onPathFound(null);
   }
 
   return (
-    <div className="graph-path">
+    <div className="path-finder">
       <h3>Path in Graph</h3>
-      {[0, 1].map((idx) => (
-        <div key={idx} className="path-input">
+      <p className="path-label">
+        Researcher 1{selected[0] && queries[0] === selected[0].label && (
+          <span className="selected-badge">{selected[0].label}</span>
+        )}
+      </p>
+      <div className="search-bar">
+        <div className="search-form" style={{ display: "flex", gap: 6 }}>
           <input
-            placeholder={`Person ${idx + 1}`}
-            value={queries[idx]}
-            onChange={(e) => handleInput(idx, e.target.value)}
+            type="text"
+            placeholder="Search in graph…"
+            value={queries[0]}
+            onChange={(e) => handleInput(0, e.target.value)}
           />
-          {filtered[idx].length > 0 && (
+        </div>
+        {filtered[0].length > 0 && (
+          <>
+            <p className="search-hint">If multiple people share a name, the number suffix (e.g. 0001, 0002) disambiguates them — verify on <a href="https://dblp.org" target="_blank" rel="noreferrer">dblp.org</a>.</p>
             <ul className="search-results">
-              {filtered[idx].map((n) => (
-                <li key={n.id} onClick={() => handleSelect(idx, n)}>
+              {filtered[0].map((n) => (
+                <li key={n.id} onClick={() => handleSelect(0, n)}>
                   <strong>{n.label}</strong>
-                  {n.affiliation && <span className="meta">{n.affiliation}</span>}
                 </li>
               ))}
             </ul>
-          )}
-          {selected[idx] && queries[idx] === selected[idx].label && (
-            <span className="selected-badge">{selected[idx].label}</span>
-          )}
-        </div>
-      ))}
+          </>
+        )}
+      </div>
 
-      <button className="find-btn" onClick={handleFind}>
+      <p className="path-label">
+        Researcher 2{selected[1] && queries[1] === selected[1].label && (
+          <span className="selected-badge">{selected[1].label}</span>
+        )}
+      </p>
+      <div className="search-bar">
+        <div className="search-form" style={{ display: "flex", gap: 6 }}>
+          <input
+            type="text"
+            placeholder="Search in graph…"
+            value={queries[1]}
+            onChange={(e) => handleInput(1, e.target.value)}
+          />
+        </div>
+        {filtered[1].length > 0 && (
+          <>
+            <p className="search-hint">If multiple people share a name, the number suffix (e.g. 0001, 0002) disambiguates them — verify on <a href="https://dblp.org" target="_blank" rel="noreferrer">dblp.org</a>.</p>
+            <ul className="search-results">
+              {filtered[1].map((n) => (
+                <li key={n.id} onClick={() => handleSelect(1, n)}>
+                  <strong>{n.label}</strong>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+
+      <button className="find-btn" onClick={handleFind} disabled={!selected[0] || !selected[1]}>
         Find shortest path
       </button>
 

@@ -33,11 +33,11 @@ export default function PathFinder({ onFindPath, loading }) {
     <div className="path-finder">
       <h3>Find Connection</h3>
       <p className="path-label">
-        Author 1{selected[0] && <span className="selected-badge">{selected[0].name}</span>}
+        Researcher 1{selected[0] && <span className="selected-badge">{selected[0].name}</span>}
       </p>
       <SearchBar onSelect={(a) => handleSelect(0, a)} disabled={loading} />
       <p className="path-label">
-        Author 2{selected[1] && <span className="selected-badge">{selected[1].name}</span>}
+        Researcher 2{selected[1] && <span className="selected-badge">{selected[1].name}</span>}
       </p>
       <SearchBar onSelect={(a) => handleSelect(1, a)} disabled={loading} />
 
