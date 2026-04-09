@@ -90,7 +90,7 @@ async def coauthors(author_id: str):
 class PathRequest(BaseModel):
     source_id: str
     target_id: str
-    max_depth: int = 6
+    max_depth: int = 8
 
 
 @app.post("/api/path")
