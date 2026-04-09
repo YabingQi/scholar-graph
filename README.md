@@ -4,6 +4,14 @@ An interactive CS collaboration graph explorer powered by [DBLP](https://dblp.or
 
 ![Scholar Graph](https://img.shields.io/badge/data-DBLP-blue) ![Python](https://img.shields.io/badge/backend-FastAPI-green) ![React](https://img.shields.io/badge/frontend-React-61dafb)
 
+![Coauthor network of Yoshua Bengio](docs/screenshot-graph.png)
+
+*Yoshua Bengio's coauthor network — click any node to expand.*
+
+![Find Path: Hinton → LeCun in 3 degrees](docs/screenshot-path.png)
+
+*Geoffrey Hinton → Yann LeCun in 3 degrees of separation.*
+
 ## Features
 
 - **Author search** — search any CS researcher by name
@@ -14,63 +22,76 @@ An interactive CS collaboration graph explorer powered by [DBLP](https://dblp.or
 
 ## Setup
 
-### Prerequisites
+### Option A: Docker (recommended)
 
-- Python 3.11+
-- Node.js 18+
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/) with Compose v2.
 
-### 1. Clone
+```bash
+git clone https://github.com/YabingQi/scholar-graph.git
+cd scholar-graph
+docker compose up
+```
+
+Open [http://localhost:5173](http://localhost:5173). Search and graph exploration work immediately.
+
+**To enable Find Path** (requires a ~1 hour one-time build):
+
+```bash
+docker compose run --rm builder
+```
+
+This downloads the DBLP XML dump (~1 GB) and builds a local SQLite graph (~5.6 GB) with 30 million coauthor pairs. The database persists in a Docker volume and survives restarts.
+
+To refresh with the latest DBLP data:
+
+```bash
+docker compose run --rm builder python build_graph.py --force
+```
+
+---
+
+### Option B: Manual setup
+
+**Prerequisites:** Python 3.11+, Node.js 18+
 
 ```bash
 git clone https://github.com/YabingQi/scholar-graph.git
 cd scholar-graph
 ```
 
-### 2. Backend
-
+**Backend:**
 ```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-pip install fastapi "uvicorn[standard]" "httpx[http2]" lxml
+pip install -r requirements.txt
 ```
 
-### 3. Build the local graph database
-
-The graph database (~5.6 GB) is not included in the repo. Build it with:
+**Build the local graph database** (optional — enables Find Path):
 
 ```bash
 python3 build_graph.py
 ```
 
-This will automatically:
-1. Download the DBLP XML dump (~1 GB compressed) from `dblp.org`
-2. Parse ~7 million publications
-3. Build a SQLite coauthor graph with ~30 million pairs
+This downloads the DBLP XML dump (~1 GB) and builds a local SQLite graph (~5.6 GB).  
+**Expected time:** ~3 min to download, ~50 min to parse. Use `--force` to rebuild.
 
-**Expected time:** ~3 min to download, ~50 min to parse (total ~1 hour). Find Path requires it; search and graph exploration work without it.
-
-To update the database with the latest DBLP data, run:
-
-```bash
-python3 build_graph.py --force
-```
-
-### 4. Frontend
-
+**Frontend:**
 ```bash
 cd frontend
 npm install
 ```
 
-### 5. Run
+**Run** (from the repo root):
+```bash
+./start.sh
+```
 
-**Backend** (in `backend/`):
+Or manually — backend in `backend/`:
 ```bash
 uvicorn main:app --reload --port 8000
 ```
-
-**Frontend** (in `frontend/`):
+Frontend in `frontend/`:
 ```bash
 npm run dev
 ```

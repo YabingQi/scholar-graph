@@ -1,4 +1,4 @@
-const BASE = "http://localhost:8000/api";
+const BASE = "/api";
 
 export async function searchAuthors(name, affiliation = "") {
   const params = new URLSearchParams({ name });

@@ -23,10 +23,10 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
 
-      - name: Syntax check
-        run: python -m py_compile main.py dblp.py graph_db.py graph.py build_graph.py
+      - name: Test
+        run: pytest -v
 
   frontend:
     name: Frontend
@@ -49,6 +49,9 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Test
+        run: npm test
 
       - name: Build
         run: npm run build

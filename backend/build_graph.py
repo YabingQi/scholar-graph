@@ -43,6 +43,30 @@ PUB_TAGS = {
 
 STALE_DAYS = 7
 
+PHASES = 4  # download · parse · join · index
+
+
+def _fmt_time(seconds: float) -> str:
+    """Format a duration as '1h 5m', '3m 12s', or '45s'."""
+    s = int(seconds)
+    if s >= 3600:
+        return f"{s // 3600}h {(s % 3600) // 60}m"
+    if s >= 60:
+        return f"{s // 60}m {s % 60}s"
+    return f"{s}s"
+
+
+def _phase(n: int, label: str) -> None:
+    print(f"\n[{n}/{PHASES}] {label}", flush=True)
+
+
+def _print_parse_progress(papers: int, persons: int, bytes_read: int, gz_size: int, elapsed: float) -> None:
+    pct = bytes_read / gz_size * 100 if gz_size else 0
+    eta = _fmt_time(elapsed * (gz_size - bytes_read) / bytes_read) if bytes_read > 0 and pct < 99 else ""
+    eta_str = f"  ETA {eta}" if eta else ""
+    print(f"\r  {papers:,} papers · {persons:,} persons  ({pct:.0f}%{eta_str})   ", end="", flush=True)
+
+
 # Pre-built map: b'uuml' -> b'&#252;'  (all HTML named entities → numeric refs)
 _XML_SAFE = {b'amp', b'lt', b'gt', b'quot', b'apos'}
 _ENTITY_MAP: dict[bytes, bytes] = {
@@ -77,21 +101,27 @@ def is_stale() -> bool:
 def download():
     import urllib.request
     DATA_DIR.mkdir(exist_ok=True)
-    print(f"Downloading {DUMP_URL} …", flush=True)
+    _phase(1, f"Downloading  {DUMP_URL}")
     start = time.time()
 
     def reporthook(count, block_size, total_size):
-        elapsed = time.time() - start
+        elapsed = time.time() - start or 0.001
         downloaded = count * block_size
         mb = downloaded / 1_000_000
+        speed = mb / elapsed
         if total_size > 0:
-            pct = downloaded / total_size * 100
-            print(f"\r  {mb:.0f} MB / {total_size/1_000_000:.0f} MB  ({pct:.1f}%)  {mb/elapsed:.1f} MB/s  ", end="", flush=True)
+            pct = min(downloaded / total_size * 100, 100)
+            remaining = (total_size - downloaded) / 1_000_000 / speed if speed > 0 else 0
+            eta = f"ETA {_fmt_time(remaining)}" if pct < 99 else "finishing…"
+            total_mb = total_size / 1_000_000
+            print(f"\r  {mb:.0f} / {total_mb:.0f} MB  ({pct:.1f}%)  {speed:.1f} MB/s  {eta}   ", end="", flush=True)
         else:
-            print(f"\r  {mb:.0f} MB  {mb/elapsed:.1f} MB/s  ", end="", flush=True)
+            print(f"\r  {mb:.0f} MB  {speed:.1f} MB/s  ", end="", flush=True)
 
     urllib.request.urlretrieve(DUMP_URL, GZ_PATH, reporthook)
-    print(f"\nDownloaded in {time.time()-start:.0f}s", flush=True)
+    elapsed = time.time() - start
+    size_mb = GZ_PATH.stat().st_size / 1_000_000
+    print(f"\r  {size_mb:.0f} MB downloaded in {_fmt_time(elapsed)}  ({size_mb/elapsed:.1f} MB/s)   ", flush=True)
 
 
 def build_db():
@@ -139,8 +169,10 @@ def build_db():
         CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)
     """)
 
-    print("Parsing DBLP XML …", flush=True)
+    _phase(2, "Parsing XML")
+    gz_size = GZ_PATH.stat().st_size
     start = time.time()
+    bytes_read = 0
 
     # In-memory buffers flushed periodically to SQLite
     raw_pair_buf: dict[tuple[str, str], int] = {}
@@ -201,9 +233,7 @@ def build_db():
                             raw_pair_buf[(a, b)] = raw_pair_buf.get((a, b), 0) + 1
                     if len(raw_pair_buf) >= FLUSH_EVERY:
                         flush_raw()
-                        elapsed = time.time() - start
-                        print(f"\r  {papers:,} papers  {persons:,} persons  {elapsed:.0f}s  ",
-                              end="", flush=True)
+                        _print_parse_progress(papers, persons, bytes_read, gz_size, time.time() - start)
                 elem.clear()
 
             # ── Person records (<www key="homepages/PID">) ───────────────
@@ -226,9 +256,7 @@ def build_db():
                         name_pid_buf[n] = www_pid
                     if len(name_pid_buf) >= FLUSH_EVERY:
                         flush_raw()
-                        elapsed = time.time() - start
-                        print(f"\r  {papers:,} papers  {persons:,} persons  {elapsed:.0f}s  ",
-                              end="", flush=True)
+                        _print_parse_progress(papers, persons, bytes_read, gz_size, time.time() - start)
                 in_www = False
                 www_pid = ""
                 elem.clear()
@@ -242,6 +270,7 @@ def build_db():
                     pull.feed(_fix_entities(pending))
                     _process_events()
                 break
+            bytes_read += len(raw)
             chunk = pending + raw
             # Avoid splitting in the middle of an entity ref
             amp_pos = chunk.rfind(b'&')
@@ -256,10 +285,11 @@ def build_db():
     flush_raw()
 
     elapsed_parse = time.time() - start
-    print(f"\n  Parsed {papers:,} papers, {persons:,} persons in {elapsed_parse:.0f}s", flush=True)
+    print(f"\r  {papers:,} papers · {persons:,} persons · parsed in {_fmt_time(elapsed_parse)}   ", flush=True)
 
     # ── Join names → PIDs to build final coauthor table ─────────────────
-    print("Joining name pairs → PIDs …", flush=True)
+    _phase(3, "Joining name pairs → author PIDs")
+    t3 = time.time()
     con.execute("CREATE INDEX idx_np ON name_pid(name)")
     con.execute("""
         INSERT INTO coauthors(pid_a, pid_b, weight)
@@ -278,29 +308,33 @@ def build_db():
         SELECT pid, name FROM name_pid
     """)
     con.commit()
-
-    # Drop temp tables
     con.execute("DROP TABLE raw_coauthors")
     con.execute("DROP TABLE name_pid")
+    print(f"  Done in {_fmt_time(time.time() - t3)}", flush=True)
 
     # ── Indexes for fast BFS lookup ──────────────────────────────────────
-    print("Building indexes …", flush=True)
+    _phase(4, "Building indexes")
+    t4 = time.time()
     con.execute("CREATE INDEX idx_ca_a ON coauthors(pid_a)")
     con.execute("CREATE INDEX idx_ca_b ON coauthors(pid_b)")
     con.execute("INSERT INTO meta VALUES('built_at', ?)", (datetime.now(timezone.utc).isoformat(),))
     con.commit()
     con.close()
+    print(f"  Done in {_fmt_time(time.time() - t4)}", flush=True)
 
-    # Atomically replace old DB
+    # ── Final summary ────────────────────────────────────────────────────
     tmp.replace(DB_PATH)
-    elapsed = time.time() - start
+    total_elapsed = time.time() - start
     size_mb = DB_PATH.stat().st_size / 1_000_000
     coauthor_count = sqlite3.connect(DB_PATH).execute("SELECT COUNT(*) FROM coauthors").fetchone()[0]
-    print(f"Done. {papers:,} papers, {persons:,} persons, {coauthor_count:,} coauthor pairs, "
-          f"{size_mb:.0f} MB, {elapsed:.0f}s", flush=True)
+    print(
+        f"\n━━━ Complete ━━━\n"
+        f"  {papers:,} papers · {persons:,} persons · {coauthor_count:,} coauthor pairs\n"
+        f"  {size_mb:,.0f} MB · built in {_fmt_time(total_elapsed)}",
+        flush=True,
+    )
     if GZ_PATH.exists():
         GZ_PATH.unlink()
-        print("Removed downloaded gz file.", flush=True)
 
 
 if __name__ == "__main__":
@@ -317,5 +351,5 @@ if __name__ == "__main__":
     if not GZ_PATH.exists() or GZ_PATH.stat().st_size < 100_000_000:
         download()
     else:
-        print(f"Using existing gz ({GZ_PATH.stat().st_size // 1_000_000} MB)", flush=True)
+        print(f"\n[1/{PHASES}] Using existing gz  ({GZ_PATH.stat().st_size // 1_000_000} MB)", flush=True)
     build_db()
