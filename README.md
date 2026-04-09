@@ -48,7 +48,13 @@ This will automatically:
 2. Parse ~7 million publications
 3. Build a SQLite coauthor graph with ~30 million pairs
 
-**Expected time:** ~5 min to download, ~5 hours to parse. The database is cached locally and auto-refreshed weekly. Find Path requires it; search and graph exploration work without it.
+**Expected time:** ~5 min to download, ~5 hours to parse. Find Path requires it; search and graph exploration work without it.
+
+To update the database with the latest DBLP data, run:
+
+```bash
+python3 build_graph.py --force
+```
 
 ### 4. Frontend
 
