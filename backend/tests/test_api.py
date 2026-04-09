@@ -4,7 +4,6 @@ External dependencies (DBLP API, SQLite DB) are mocked so tests run offline.
 """
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
-import pytest
 
 from main import app
 
@@ -89,3 +88,45 @@ def test_path_returns_path(mock_get_author, *_):
     data = resp.json()
     assert data["degrees"] == 1
     assert data["path"] == ["a/Alice", "b/Bob"]
+
+
+# ── max_depth validation ──────────────────────────────────────────────────────
+
+def test_path_max_depth_zero_is_rejected():
+    """max_depth=0 is below the ge=1 constraint → 422."""
+    resp = client.post("/api/path", json={"source_id": "a/A", "target_id": "b/B", "max_depth": 0})
+    assert resp.status_code == 422
+
+
+def test_path_max_depth_negative_is_rejected():
+    """Negative max_depth → 422."""
+    resp = client.post("/api/path", json={"source_id": "a/A", "target_id": "b/B", "max_depth": -1})
+    assert resp.status_code == 422
+
+
+def test_path_max_depth_above_limit_is_rejected():
+    """max_depth=13 exceeds the le=12 constraint → 422."""
+    resp = client.post("/api/path", json={"source_id": "a/A", "target_id": "b/B", "max_depth": 13})
+    assert resp.status_code == 422
+
+
+@patch("main.graph_db.db_available", return_value=False)
+def test_path_max_depth_boundary_min_accepted(*_):
+    """max_depth=1 is the minimum valid value; request proceeds (fails at 503, not 422)."""
+    resp = client.post("/api/path", json={"source_id": "a/A", "target_id": "b/B", "max_depth": 1})
+    assert resp.status_code == 503  # fails at DB check, not validation
+
+
+@patch("main.graph_db.db_available", return_value=False)
+def test_path_max_depth_boundary_max_accepted(*_):
+    """max_depth=12 is the maximum valid value; request proceeds (fails at 503, not 422)."""
+    resp = client.post("/api/path", json={"source_id": "a/A", "target_id": "b/B", "max_depth": 12})
+    assert resp.status_code == 503  # fails at DB check, not validation
+
+
+@patch("main.graph_db.db_available", return_value=True)
+@patch("main.graph_db.find_path", return_value=None)
+def test_path_max_depth_forwarded_to_find_path(mock_find_path, *_):
+    """The validated max_depth value is passed through to graph_db.find_path."""
+    client.post("/api/path", json={"source_id": "a/A", "target_id": "b/B", "max_depth": 5})
+    mock_find_path.assert_called_once_with("a/A", "b/B", 5)

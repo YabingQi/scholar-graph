@@ -1,15 +1,29 @@
 import os
+import logging
+import time
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 import asyncio
 
 from dblp import search_authors, get_author, get_coauthors
 import graph_db
 
-app = FastAPI(title="Scholar Graph API")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("scholar_graph")
+
+app = FastAPI(
+    title="Scholar Graph API",
+    description="Explore academic collaboration networks via DBLP data.",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
 # CORS_ORIGINS env var overrides the default localhost origins.
 # Example: CORS_ORIGINS="https://yourdomain.com,https://www.yourdomain.com"
@@ -22,6 +36,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.monotonic()
+    response = await call_next(request)
+    ms = (time.monotonic() - start) * 1000
+    logger.info("%s %s %d %.0fms", request.method, request.url.path, response.status_code, ms)
+    return response
 
 
 # ── Search ──────────────────────────────────────────────────────────────────
@@ -97,7 +120,7 @@ async def coauthors(author_id: str):
 class PathRequest(BaseModel):
     source_id: str
     target_id: str
-    max_depth: int = 8
+    max_depth: int = Field(default=8, ge=1, le=12)
 
 
 @app.post("/api/path")

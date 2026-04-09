@@ -32,7 +32,9 @@ cd scholar-graph
 docker compose up
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Search and graph exploration work immediately.
+Open [http://localhost:3000](http://localhost:3000). Search and graph exploration work immediately.
+
+> **API docs:** available at [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger UI) while the backend is running.
 
 **To enable Find Path** (requires a ~1 hour one-time build):
 
@@ -97,6 +99,8 @@ npm run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173).
+
+> **API docs:** available at [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger UI) while the backend is running.
 
 ## Project Structure
 

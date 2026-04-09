@@ -14,11 +14,11 @@ export async function getCoauthors(authorId) {
   return res.json();
 }
 
-export async function findPath(sourceId, targetId) {
+export async function findPath(sourceId, targetId, maxDepth = 8) {
   const res = await fetch(`${BASE}/path`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source_id: sourceId, target_id: targetId }),
+    body: JSON.stringify({ source_id: sourceId, target_id: targetId, max_depth: maxDepth }),
   });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(await res.text());

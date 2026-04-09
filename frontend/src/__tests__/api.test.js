@@ -41,12 +41,20 @@ describe('getCoauthors', () => {
 });
 
 describe('findPath', () => {
-  it('calls /api/path with correct body', async () => {
+  it('calls /api/path with correct body including default max_depth', async () => {
     mockFetch.mockResolvedValue(ok({ path: ['a', 'b'], degrees: 1, nodes: [] }));
     await findPath('a/Alice', 'b/Bob');
     expect(mockFetch).toHaveBeenCalledWith('/api/path', expect.objectContaining({
       method: 'POST',
-      body: JSON.stringify({ source_id: 'a/Alice', target_id: 'b/Bob' }),
+      body: JSON.stringify({ source_id: 'a/Alice', target_id: 'b/Bob', max_depth: 8 }),
+    }));
+  });
+
+  it('passes custom max_depth when provided', async () => {
+    mockFetch.mockResolvedValue(ok({ path: ['a', 'b'], degrees: 1, nodes: [] }));
+    await findPath('a/Alice', 'b/Bob', 5);
+    expect(mockFetch).toHaveBeenCalledWith('/api/path', expect.objectContaining({
+      body: JSON.stringify({ source_id: 'a/Alice', target_id: 'b/Bob', max_depth: 5 }),
     }));
   });
 
